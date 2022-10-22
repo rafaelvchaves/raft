@@ -1,6 +1,5 @@
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::vec;
 
 use raft::{
     raft_server::{Raft, RaftServer},
@@ -28,24 +27,12 @@ pub struct RaftNode {
     voted_for: Option<String>,
     log: Log,
     // volatile state
-    // commit_index: u64,
+    commit_index: u64,
     // last_applied: u64,
     // volatile leader state?
 }
 
-type Log = Arc<Mutex<Vec<LogEntry>>>;
-
-#[derive(Debug)]
-struct LogEntry {
-    command: Command,
-    term: u64,
-}
-
-#[derive(Debug)]
-enum Command {
-    Get(String),
-    Put(String, i64),
-}
+type Log = Arc<Mutex<Vec<raft::LogEntry>>>;
 
 #[tonic::async_trait]
 impl Raft for RaftNode {
@@ -75,10 +62,12 @@ impl Raft for RaftNode {
         let has_entry = i < log.len() && log[i].term == r.prev_log_term;
         if is_current {
             if has_entry {
-              // let a = r.entries[0];
-              // log.extend(r.entries);
+                log.extend(r.entries);
             } else {
                 log.truncate(i);
+            }
+            if self.commit_index < r.leader_commit {
+              // self.commit_index = min(r.leader_commit, ??);
             }
         }
         Ok(Response::new(raft::AppendEntriesResponse {
@@ -87,14 +76,6 @@ impl Raft for RaftNode {
         }))
     }
 }
-
-// fn unmarshal_entries(entries: Vec<raft::LogEntry>) -> Vec<LogEntry> {
-//   let v = Vec::new();
-//   for entry in entries.iter() {
-//     // entry.
-//   }
-//   return v
-// }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
