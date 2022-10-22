@@ -33,11 +33,6 @@ message LogEntry {
 }
 
 message Command {
-  enum CommandType {
-    GET = 0;
-    PUT = 1;
-  }
-  CommandType type = 1;
   string key = 2;
   int64 value = 3;
 }
