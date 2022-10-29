@@ -11,25 +11,33 @@ pub mod raft {
     tonic::include_proto!("raft");
 }
 
-// #[derive(Debug, Default)]
-// enum Role {
-//     #[default]
-//     Follower,
-//     Candidate,
-//     Leader,
-// }
+#[derive(Debug, Default)]
+enum State {
+    #[default]
+    Follower,
+    Candidate,
+    Leader,
+}
 
 #[derive(Debug, Default)]
 pub struct RaftNode {
-    // role: Role,
     // persistent state
     current_term: u64,
     voted_for: Option<String>,
     log: Log,
+
     // volatile state
+    id: String,     // ip address or some other identifier
+    state: State,   // leader, candidate, or follower
     commit_index: u64,
-    // last_applied: u64,
+    last_applied: u64,
+    current_leader: Option<String>,
+    peers: Vec<String>,
+    state_machine: std::collections::HashMap<String, i64>,
+
     // volatile leader state?
+    next_index: Vec<u64>,
+    match_index: Vec<u64>
 }
 
 type Log = Arc<Mutex<Vec<raft::LogEntry>>>;
@@ -45,6 +53,8 @@ impl Raft for RaftNode {
             None => true,
             Some(id) => *id == r.candidate_id,
         };
+        // check if candidate's log is at least as
+        // up-to-date as receiver's log
         Ok(Response::new(raft::VoteResponse {
             term: self.current_term,
             vote_granted: self.current_term <= r.term && can_vote,
@@ -62,12 +72,13 @@ impl Raft for RaftNode {
         let has_entry = i < log.len() && log[i].term == r.prev_log_term;
         if is_current {
             if has_entry {
+                // this is wrong: need to replace next entries rather than extend.
                 log.extend(r.entries);
             } else {
                 log.truncate(i);
             }
             if self.commit_index < r.leader_commit {
-              // self.commit_index = min(r.leader_commit, ??);
+                // self.commit_index = min(r.leader_commit, ??);
             }
         }
         Ok(Response::new(raft::AppendEntriesResponse {
